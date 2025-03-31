@@ -501,7 +501,6 @@ class NTupleApproximator:
         return action
 
 
-
 patterns = [
     [(0, 0), (0, 1), (0, 2), (0, 3)],
     [(1, 0), (1, 1), (1, 2), (1, 3)],
@@ -511,13 +510,18 @@ patterns = [
     [(0, 0), (0, 1), (1, 1), (1, 2)],
 ]
 
-approximator = NTupleApproximator(board_size=4, patterns=patterns)
-with open('value_approximator.pkl', 'rb') as file:
-    approximator = pickle.load(file)
+
 
 def get_action(state, score):
-    env = Game2048Env()
-    legal_moves = [a for a in range(4) if env.is_move_legal(a)]
+
+    approximator = NTupleApproximator(board_size=4, patterns=patterns)
+
+    sim_env = Action(state)
+
+    with open('value_approximator_weights.pkl', 'rb') as file:
+        approximator.weights = pickle.load(file)
+            
+    legal_moves = [a for a in range(4) if sim_env.is_move_legal(a)]
     action = approximator.best_action(state, legal_moves)
     return action
 

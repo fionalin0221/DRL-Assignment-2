@@ -4,3 +4,4 @@ argparse
 torch
 torchvision
 matplotlib
+gym
