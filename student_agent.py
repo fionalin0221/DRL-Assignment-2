@@ -501,21 +501,11 @@ class Game2048Env(gym.Env):
         # If the simulated board is different from the current board, the move is legal
         return not np.array_equal(self.board, temp_board)
 
-patterns = [
-    [(0, 0), (0, 1), (0, 2), (0, 3)],
-    [(1, 0), (1, 1), (1, 2), (1, 3)],
-    [(0, 0), (0, 1), (1, 0), (1, 1)],
-    [(1, 1), (1, 2), (2, 1), (2, 2)],
-    [(1, 0), (1, 1), (2, 0), (2, 1)],
-    [(0, 0), (0, 1), (1, 1), (1, 2)],
-]
-
-approximator = NTupleApproximator(board_size=4, patterns=patterns)
-
-with open('value_approximator_9.pkl', 'rb') as file:
-    approximator = pickle.load(file)
 
 def get_action(state, score):
+
+    with open('value_approximator_9.pkl', 'rb') as file:
+        approximator = pickle.load(file)
 
     env = Game2048Env()
     legal_moves = [a for a in range(4) if env.is_move_legal(a)]
