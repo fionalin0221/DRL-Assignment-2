@@ -501,8 +501,6 @@ class NTupleApproximator:
         return action
 
 
-# with open('value_approximator_9.pkl', 'rb') as file:
-#     approximator = pickle.load(file)
 
 patterns = [
     [(0, 0), (0, 1), (0, 2), (0, 3)],
@@ -514,6 +512,8 @@ patterns = [
 ]
 
 approximator = NTupleApproximator(board_size=4, patterns=patterns)
+with open('value_approximator_9.pkl', 'rb') as file:
+    approximator = pickle.load(file)
 
 def get_action(state, score):
     env = Game2048Env()
