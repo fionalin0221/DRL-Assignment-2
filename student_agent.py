@@ -512,7 +512,7 @@ patterns = [
 ]
 
 approximator = NTupleApproximator(board_size=4, patterns=patterns)
-with open('value_approximator_9.pkl', 'rb') as file:
+with open('value_approximator.pkl', 'rb') as file:
     approximator = pickle.load(file)
 
 def get_action(state, score):
