@@ -14,7 +14,7 @@ class Connect6Game:
         self.board.fill(0)
         self.turn = 1
         self.game_over = False
-        print("= ", flush=True)
+        # print("= ", flush=True)
 
     def set_board_size(self, size):
         """Sets the board size and resets the game."""
@@ -22,7 +22,7 @@ class Connect6Game:
         self.board = np.zeros((size, size), dtype=int)
         self.turn = 1
         self.game_over = False
-        print("= ", flush=True)
+        # print("= ", flush=True)
 
     def check_win(self):
         """Checks if a player has won.
@@ -91,14 +91,14 @@ class Connect6Game:
                 return
             if self.board[row, col] != 0:
                 print("? Position already occupied")
-                return
+                return "error"
             positions.append((row, col))
 
         for row, col in positions:
             self.board[row, col] = 1 if color.upper() == 'B' else 2
 
         self.turn = 3 - self.turn
-        print('= ', end='', flush=True)
+        # print('= ', end='', flush=True)
 
     def generate_move(self, color):
         """Generates a random move for the computer."""
@@ -112,12 +112,12 @@ class Connect6Game:
         
         self.play_move(color, move_str)
 
-        print(f"{move_str}\n\n", end='', flush=True)
+        # print(f"{move_str}\n\n", end='', flush=True)
         print(move_str, file=sys.stderr)
 
     def show_board(self):
         """Displays the board as text."""
-        print("= ")
+        # print("= ")
         for row in range(self.size - 1, -1, -1):
             line = f"{row+1:2} " + " ".join("X" if self.board[row, col] == 1 else "O" if self.board[row, col] == 2 else "." for col in range(self.size))
             print(line)
@@ -127,7 +127,7 @@ class Connect6Game:
 
     def list_commands(self):
         """Lists all available commands."""
-        print("= ", flush=True)  
+        # print("= ", flush=True)  
 
     def process_command(self, command):
         """Parses and executes GTP commands."""
@@ -165,7 +165,7 @@ class Connect6Game:
         elif cmd == "list_commands":
             self.list_commands()
         elif cmd == "quit":
-            print("= ", flush=True)
+            # print("= ", flush=True)
             sys.exit(0)
         else:
             print("? Unsupported command")
