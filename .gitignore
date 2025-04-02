@@ -10,6 +10,7 @@ np
 random
 copy
 gc
+sys
 gogui-client.exe
 itertools
 ludii_preferences.json

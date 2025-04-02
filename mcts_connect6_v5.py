@@ -143,7 +143,6 @@ class UCTNode:
                     nr, nc = r + dr, c + dc
                     if 0 <= nr < size and 0 <= nc < size and (nr, nc) not in stones:
                         candidates.add((nr, nc))
-
         return list(candidates)
     
     def get_candidate_actions(self, untried_actions):
@@ -151,8 +150,6 @@ class UCTNode:
         for idx, (pos0, pos1) in enumerate(untried_actions):
             if abs(pos1[0]-pos0[0])+abs(pos1[1]-pos0[1]) <= 4:
                 candidate_actions.append(untried_actions[idx])
-        if len(candidate_actions) > 100:
-            candidate_actions = random.sample(candidate_actions, 100)
         return candidate_actions
 
 class UCTMCTS:
@@ -294,8 +291,6 @@ class Connect6Game:
         self.board = np.zeros((size, size), dtype=int)  # 0: Empty, 1: Black, 2: White
         self.turn = 1  # 1: Black, 2: White
         self.game_over = False
-        self.memory_place = None
-        self.which_piece = 1
 
     def reset_board(self):
         """Clears the board and resets the game."""
@@ -388,17 +383,18 @@ class Connect6Game:
         self.turn = 3 - self.turn
         print('= ', end='', flush=True)
 
-    def generate_move(self, color, uct_mcts):
+    def generate_move(self, color, uct_mcts, first_step):
         """Generates a random move for the computer."""
         if self.game_over:
             print("? Game over")
             return
-        move_str = ""
-        if np.all(self.board == 0):
+
+        if first_step:
             empty_positions = [(r, c) for r in range(self.size) for c in range(self.size) if self.board[r, c] == 0]
             selected = random.sample(empty_positions, 1)
             move_str = ",".join(f"{self.index_to_label(c)}{r+1}" for r, c in selected)
-        elif self.which_piece == 1:
+        
+        else:
             state = np.copy(self.board)
             root = UCTNode(state)
             uct_mcts.iterations = len(root.candidate_actions) * 4
@@ -407,19 +403,8 @@ class Connect6Game:
                 uct_mcts.run_simulation(root, self.turn)
 
                 best_action = uct_mcts.best_action_distribution(root)
+                move_str = ",".join(f"{self.index_to_label(c)}{r+1}" for r, c in best_action)
 
-            selected = [best_action[0]]
-            move_str = ",".join(f"{self.index_to_label(c)}{r+1}" for r, c in selected)
-            self.memory_place = [best_action[1]]
-            self.which_piece = 2
-            # empty_positions = [(r, c) for r in range(self.size) for c in range(self.size) if self.board[r, c] == 0]
-            # selected = random.sample(empty_positions, 1)
-            # move_str = ",".join(f"{self.index_to_label(c)}{r+1}" for r, c in selected)
-        else:
-            selected = self.memory_place
-            move_str = ",".join(f"{self.index_to_label(c)}{r+1}" for r, c in selected)
-            self.which_piece = 1
-            
         self.play_move(color, move_str)
 
         print(f"{move_str}\n\n", end='', flush=True)
@@ -427,7 +412,7 @@ class Connect6Game:
 
     def show_board(self):
         """Displays the board as text."""
-        print("= ")
+        # print("= ")
         for row in range(self.size - 1, -1, -1):
             line = f"{row+1:2} " + " ".join("X" if self.board[row, col] == 1 else "O" if self.board[row, col] == 2 else "." for col in range(self.size))
             print(line)
@@ -439,7 +424,7 @@ class Connect6Game:
         """Lists all available commands."""
         print("= ", flush=True)  
 
-    def process_command(self, command, uct_mcts):
+    def process_command(self, command,  uct_mcts, first_step):
         """Parses and executes GTP commands."""
         command = command.strip()
         if command == "get_conf_str env_board_size:":
@@ -470,7 +455,7 @@ class Connect6Game:
             if len(parts) < 2:
                 print("? Invalid genmove command format")
             else:
-                self.generate_move(parts[1], uct_mcts)
+                self.generate_move(parts[1], uct_mcts, first_step)
         elif cmd == "showboard":
             self.show_board()
         elif cmd == "list_commands":
@@ -483,12 +468,14 @@ class Connect6Game:
 
     def run(self, uct_mcts):
         """Main loop that reads GTP commands from standard input."""
+        first_step = True
         while True:
             try:
                 line = sys.stdin.readline()
                 if not line:
                     break
-                self.process_command(line, uct_mcts)
+                self.process_command(line, uct_mcts, first_step)
+                first_step = False
             except KeyboardInterrupt:
                 break
             except Exception as e:
