@@ -33,6 +33,9 @@ jobs:
       run: |
         gdown --fuzzy https://drive.google.com/file/d/1G9xRMK6oniVhs_EZYo8S7Mo4eqVbv7jT/view?usp=sharing
     
+    - name: Move weights file to root directory
+      run: mv .github/workflows/value_approximator_5_weights.pkl .
+    
     - name: 4. Ensure env.so is executable
       run: chmod +x env.cpython-38-x86_64-linux-gnu.so
 
