@@ -407,9 +407,6 @@ class Action:
 
         # If the simulated board is different from the current board, the move is legal
         return not np.array_equal(self.board, temp_board)
-    
-    def add_tile(self, x, y, num):
-        self.board[x, y] = num
 
 class NTupleApproximator:
     def __init__(self, board_size, patterns):
@@ -420,6 +417,8 @@ class NTupleApproximator:
         self.board_size = board_size
         self.POWER = 15
         self.patterns = patterns
+        # Create a weight dictionary for each pattern (shared within a pattern group)
+        # self.weights = [defaultdict(float) for _ in patterns]
         
         # Generate symmetrical transformations for each pattern
         self.symmetry_patterns = []
@@ -433,8 +432,6 @@ class NTupleApproximator:
         
             self.symmetry_patterns.extend(symmetric_pattern)
 
-        # Create a weight dictionary for each pattern (shared within a pattern group)
-        # self.weights = [defaultdict(float) for _ in patterns]
         self.weights = []
         for pattern in self.symmetry_patterns:
             self.weights.append(np.zeros((self.POWER + 1) ** len(pattern)))
@@ -465,45 +462,30 @@ class NTupleApproximator:
             # 2^n -> n, like 2->1, 4->2, 8->3, ...
             return int(math.log(tile, 2))
 
-    def get_feature(self, board, coords):
-        # TODO: Extract tile values from the board based on the given coordinates and convert them into a feature tuple.
-        pass
-    #     features = []
-    #     # each pattern have N-tuples(coords)
-    #     for coord in coords:
-    #         tile = board[coord[0]][coord[1]]
-    #         index = self.tile_to_index(tile) # convert to power expression
-    #         features.append(index)
-    #     return tuple(features)
-
     def tuple_id(self, values):
         values = values[::-1]
         k = 1
         n = 0
         for v in values:
+            if v >= self.POWER:
+                raise ValueError(
+                    "digit %d should be smaller than the base %d" % (v, self.POWER)
+                )
             n += v * k
             k *= self.POWER
         return n
 
-    def value(self, board):
-        # TODO: Estimate the board value: sum the evaluations from all patterns.
+    def value(self, board, delta=None):
         vals = []
         for i, (pattern, weight) in enumerate(zip(self.symmetry_patterns, self.weights)):
             tiles = [board[i][j] for i, j in pattern]
             index = [self.tile_to_index(t) for t in tiles]
             tpid = self.tuple_id(index)
+            if delta is not None:
+                weight[tpid] += delta
             v = weight[tpid]
             vals.append(v)
         return np.mean(vals)
-
-    def update(self, board, delta, alpha):
-        # TODO: Update weights based on the TD error.
-        for i, (pattern, weight) in enumerate(zip(self.symmetry_patterns, self.weights)):
-            tiles = [board[i][j] for i, j in pattern]
-            index = [self.tile_to_index(t) for t in tiles]
-            tpid = self.tuple_id(index)
-
-            weight[tpid] += alpha * delta
     
     def best_action(self, state, legal_moves):
         values = []
@@ -519,324 +501,6 @@ class NTupleApproximator:
         return action
 
 
-# Note: This MCTS implementation is almost identical to the previous one,
-# except for the rollout phase, which now incorporates the approximator.
-
-# Node for TD-MCTS using the TD-trained value approximator
-class TD_MCTS_Node:
-    def __init__(self, state, score, state_type, update_reward, parent=None):
-        """
-        state: current board state (numpy array)
-        score: cumulative score at this node
-        parent: parent node (None for root)
-        action: action taken from parent to reach this node
-        """
-        self.state = state
-        self.score = score
-        self.parent = parent
-        
-        self.children = {}
-        self.visits = 0
-        self.total_reward = 0.0
-        self.update_reward = update_reward
-
-        self.state_type = state_type
-        # List of untried actions based on the current state's legal moves
-        if self.state_type == "next":
-            self.untried_actions = [a for a in range(4) if self.is_move_legal(a)]
-
-            self.random_tile = {'num': None, 'pos': None}
-
-        
-        elif self.state_type == "after":
-            random_space_2 = self.select_random_tile(num=5)
-            random_space_4 = self.select_random_tile(num=1)
-            self.untried_positions = {2: list(random_space_2), 4: list(random_space_4)}
-
-            self.action = None
-
-        
-    def fully_expanded(self):
-        # A node is fully expanded if no legal actions remain untried.
-        if self.state_type == "next":
-            return len(self.untried_actions) == 0
-        elif self.state_type == "after":
-            return (len(self.untried_positions[2])+len(self.untried_positions[4])) == 0
-    
-    def select_random_tile(self, num=5):
-        empty_space = [(i, j) for i, row in enumerate(self.state) for j, val in enumerate(row) if val == 0]
-        if len(empty_space) >= num:
-            return random.sample(empty_space, num)
-        else:
-            return empty_space
-        
-    def is_move_legal(self, action, size=4):
-        """Check if the specified move is legal (i.e., changes the board)"""
-        # Create a copy of the current board state
-        temp_board = self.state.copy()
-
-        if action == 0:  # Move up
-            for j in range(size):
-                col = temp_board[:, j]
-                new_col = self.simulate_row_move(col)
-                temp_board[:, j] = new_col
-        elif action == 1:  # Move down
-            for j in range(size):
-                # Reverse the column, simulate, then reverse back
-                col = temp_board[:, j][::-1]
-                new_col = self.simulate_row_move(col)
-                temp_board[:, j] = new_col[::-1]
-        elif action == 2:  # Move left
-            for i in range(size):
-                row = temp_board[i]
-                temp_board[i] = self.simulate_row_move(row)
-        elif action == 3:  # Move right
-            for i in range(size):
-                row = temp_board[i][::-1]
-                new_row = self.simulate_row_move(row)
-                temp_board[i] = new_row[::-1]
-        else:
-            raise ValueError("Invalid action")
-
-        # If the simulated board is different from the current board, the move is legal
-        return not np.array_equal(self.state, temp_board)
-
-    def simulate_row_move(self, row, size=4):
-        """Simulate a left move for a single row"""
-        # Compress: move non-zero numbers to the left
-        new_row = row[row != 0]
-        new_row = np.pad(new_row, (0, size - len(new_row)), mode='constant')
-        # Merge: merge adjacent equal numbers (do not update score)
-        for i in range(len(new_row) - 1):
-            if new_row[i] == new_row[i + 1] and new_row[i] != 0:
-                new_row[i] *= 2
-                new_row[i + 1] = 0
-        # Compress again
-        new_row = new_row[new_row != 0]
-        new_row = np.pad(new_row, (0, size - len(new_row)), mode='constant')
-        return new_row
-
-
-# TD-MCTS class utilizing a trained approximator for leaf evaluation
-class TD_MCTS:
-    def __init__(self, env, approximator, iterations=500, exploration_constant=1.41, rollout_depth=10, gamma=0.99):
-        self.env = env
-        self.approximator = approximator
-        self.iterations = iterations
-        self.c = exploration_constant
-        self.rollout_depth = rollout_depth
-        self.gamma = gamma
-
-    def select_child(self, node):
-        # TODO: Use the UCT formula: Q + c * sqrt(log(parent.visits)/child.visits) to select the best child.
-        if node.state_type == "next":
-            best_uct = -np.inf
-            best_child = None
-            
-            for action, child in node.children.items():
-                # print("Q value: ",child.total_reward / child.visits, "explore term: ", self.c * np.sqrt(np.log(node.visits)/(child.visits)))
-                uct = child.total_reward / child.visits + self.c * np.sqrt(np.log(node.visits)/(child.visits))
-                if uct > best_uct:
-                    best_uct = uct
-                    best_child = child
-            # print("\n")
-            return best_child
-        else:
-            select_child = None
-            num = random.choice([2, 4])
-            children = []
-            for child in node.children.values():
-                if child.random_tile['num'] == num:
-                    children.append(child)
-            if children:
-                select_child = random.choice(children)
-
-            return select_child
-
-
-    def rollout(self, sim_env, after_state, state, state_type, depth):
-        # TODO: Perform a random rollout until reaching the maximum depth or a terminal state.
-        # TODO: Use the approximator to evaluate the final state.
-        done = False
-        rewards = 0.0
-
-        V_norm = 45000
-
-        # print("Before " ,self.approximator.value(after_state)/V_norm)
-        # print(after_state)
-
-        # if state_type == "next":
-        #     legal_moves = [a for a in range(4) if sim_env.is_move_legal(a)]
-        #     if not legal_moves:
-        #         return rewards + self.approximator.value(after_state)/V_norm
-            
-        #     values = []
-        #     sim_sim_env = Action(state)
-        #     for a in legal_moves:
-        #         a_s, r = sim_sim_env.fake_step(a)
-        #         values.append(self.approximator.value(a_s))
-                
-        #     action = legal_moves[np.argmax(values)]
-
-        #     after_state, reward = sim_env.fake_step(action)
-        #     rewards += reward
-
-        #     empty_cells = list(zip(*np.where(after_state == 0)))
-        #     if empty_cells:
-        #         x, y = random.choice(empty_cells)
-        #         num = 2 if random.random() < 0.9 else 4
-        #         sim_env.add_tile(x, y, num)
-        #     else:
-        #         return rewards + self.approximator.value(after_state)/V_norm
-
-        if state_type == "after":
-            empty_cells = list(zip(*np.where(state == 0)))
-            if empty_cells:
-                x, y = random.choice(empty_cells)
-                num = 2 if random.random() < 0.9 else 4
-                sim_env.add_tile(x, y, num)
-            else:
-                return 0.0 + self.approximator.value(after_state)/V_norm
-            
-        legal_moves = [a for a in range(4) if sim_env.is_move_legal(a)]
-        if not legal_moves:
-            return 0.0 + self.approximator.value(after_state)/V_norm
-
-        # real rollout
-        for _ in range(depth):
-            if not done:
-                legal_moves = [a for a in range(4) if sim_env.is_move_legal(a)]
-                if not legal_moves:
-                    break
-                # action = random.choice(legal_moves)
-
-                values = []
-                sim_sim_env = Action(state)
-                for a in legal_moves:
-                    a_s, r = sim_sim_env.fake_step(a)
-                    values.append(self.approximator.value(a_s))
-                action = legal_moves[np.argmax(values)]
-
-                
-                after_state, reward = sim_env.fake_step(action)
-                rewards += reward
-
-                empty_cells = list(zip(*np.where(after_state == 0)))
-                if empty_cells:
-                    x, y = random.choice(empty_cells)
-                    num = 2 if random.random() < 0.9 else 4
-                    sim_env.add_tile(x, y, num)
-                else:
-                    break
-            else:
-                break
-
-        return rewards + self.approximator.value(after_state)/V_norm
-
-    def backpropagate(self, node, rollout_reward):
-        # TODO: Propagate the obtained reward back up the tree.
-        update_rewards = rollout_reward
-
-        while node is not None:
-            node.visits += 1
-            node.total_reward += update_rewards
-            
-            update_rewards += node.update_reward
-            node = node.parent
-
-    def run_simulation(self, root):
-        node = root
-        score = root.score
-
-        # TODO: Selection: Traverse the tree until reaching an unexpanded node.
-        while node.fully_expanded():
-            new_node = self.select_child(node)
-            if new_node == None:
-                return
-            node = new_node
-
-        # TODO: Expansion: If the node is not terminal, expand an untried action.
-        if node.state_type == "next":
-            if node.untried_actions:
-                action = random.choice(node.untried_actions)
-                node.untried_actions.remove(action)
-
-                sim_env = Action(node.state)
-                after_state, reward = sim_env.fake_step(action)
-                
-                score = node.score + reward
-
-                ### Update the search tree
-                child_node = TD_MCTS_Node(copy.copy(after_state), score, "after", reward, parent=node)
-                child_node.action = action
-
-                node.children[action] = child_node
-                node = child_node
-
-        elif node.state_type == "after":
-            num = random.choice([2, 4])
-
-            if node.untried_positions[num]:
-                x, y = random.choice(node.untried_positions[num])
-            else:
-                if num == 2:
-                    num = 4
-                else:
-                    num = 2
-                if node.untried_positions[num]:
-                    x, y = random.choice(node.untried_positions[num])
-                    
-            node.untried_positions[num].remove((x, y))
-
-            sim_env = Action(node.state)
-            sim_env.add_tile(x, y, num)
-            next_state = sim_env.board
-            score = node.score
-
-            ### Update the search tree
-            child_node = TD_MCTS_Node(copy.copy(next_state), score, "next", 0, parent=node)
-            child_node.random_tile['num'] = num
-            child_node.random_tile['pos'] = (x, y)
-
-            node.children[(x, y)] = child_node
-            node = child_node
-
-        
-        # Rollout: Simulate a random game from the expanded node.
-        if node.state_type == "next":
-            after_state = copy.copy(node.parent.state)
-        else:
-            after_state = copy.copy(node.state)
-
-        rollout_reward = self.rollout(sim_env, after_state, copy.copy(node.state), node.state_type, self.rollout_depth)
-
-        # Backpropagate the obtained reward.
-        self.backpropagate(node, rollout_reward)
-
-    def best_action_distribution(self, root):
-        # Compute the normalized visit count distribution for each child of the root.
-        total_visits = sum(child.visits for child in root.children.values())
-        distribution = np.zeros(4)
-        best_visits = -1
-        best_action = None
-        for action, child in root.children.items():
-            distribution[action] = child.visits / total_visits if total_visits > 0 else 0
-            if child.visits > best_visits:
-                best_visits = child.visits
-                best_action = action
-        return best_action, distribution
-
-
-# patterns = [
-#     [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)],
-#     [(0, 0), (0, 1), (0, 2), (0, 3), (1, 0), (1, 1)],
-#     [(1, 0), (1, 1), (1, 2), (1, 3), (2, 0), (2, 1)],
-#     [(0, 0), (0, 1), (1, 1), (1, 2), (1, 3), (2, 2)],
-#     [(0, 0), (0, 1), (0, 2), (1, 1), (2, 1), (2, 2)],
-#     [(0, 0), (0, 1), (1, 1), (2, 1), (3, 1), (3, 2)],
-#     [(0, 0), (0, 1), (1, 1), (2, 0), (2, 1), (3, 1)],
-#     [(0, 0), (0, 1), (0, 2), (1, 0), (1, 2), (2, 2)]
-# ]
 patterns = [
     [(0, 0), (0, 1), (0, 2), (0, 3)],
     [(1, 0), (1, 1), (1, 2), (1, 3)],
@@ -846,38 +510,20 @@ patterns = [
     [(0, 0), (0, 1), (1, 1), (1, 2)],
 ]
 
-approximator = NTupleApproximator(board_size=4, patterns=patterns)
-with open('value_approximator_5_weights.pkl', 'rb') as file:
-    approximator.weights = pickle.load(file)
 
 
 def get_action(state, score):
-    
-    root = TD_MCTS_Node(state, score, "next", 0)
 
-    env = Action(state)
-    # print([a for a in range(4) if root.is_move_legal(a)])
+    approximator = NTupleApproximator(board_size=4, patterns=patterns)
 
-    td_mcts = TD_MCTS(env, approximator, iterations=5, exploration_constant=0.001, rollout_depth=0, gamma=0.99)
+    sim_env = Action(state)
 
-    # Run multiple simulations to build the MCTS tree
-    for _ in range(td_mcts.iterations):
-        td_mcts.run_simulation(root)
-    
-    # Select the best action (based on highest visit count)
-    # action, _ = td_mcts.best_action_distribution(root)
-    best_score = -1
-    best_act = None
-    for action, child in root.children.items():
-        score = child.total_reward / child.visits if child.visits > 0 else 0
-        if score > best_score:
-            best_score = score
-            best_act = action
-
-    if best_act == None:
-        best_act = random.choice([0,1,2,3])
-
-    return best_act
+    with open('value_approximator_weights.pkl', 'rb') as file:
+        approximator.weights = pickle.load(file)
+            
+    legal_moves = [a for a in range(4) if sim_env.is_move_legal(a)]
+    action = approximator.best_action(state, legal_moves)
+    return action
 
     # return random.choice([0, 1, 2, 3]) # Choose a random action
     

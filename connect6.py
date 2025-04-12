@@ -114,7 +114,7 @@ class UCTNode:
         self.total_reward = 0
         # self.empty_positions = [(r, c) for r in range(size) for c in range(size) if self.state[r, c] == 0]
         self.candidate_positions = self.get_candidate_positions(self.size)
-        
+
         self.untried_actions = list(itertools.combinations(self.candidate_positions, 2))
         self.candidate_actions = self.get_candidate_actions(self.untried_actions)
     
@@ -151,8 +151,8 @@ class UCTNode:
         for idx, (pos0, pos1) in enumerate(untried_actions):
             if abs(pos1[0]-pos0[0])+abs(pos1[1]-pos0[1]) <= 4:
                 candidate_actions.append(untried_actions[idx])
-        if len(candidate_actions) > 100:
-            candidate_actions = random.sample(candidate_actions, 100)
+        if len(candidate_actions) > 50:
+            candidate_actions = random.sample(candidate_actions, 50)
         return candidate_actions
 
 class UCTMCTS:
@@ -388,6 +388,8 @@ class Connect6Game:
         self.turn = 3 - self.turn
         print('= ', end='', flush=True)
 
+        return
+
     def generate_move(self, color, uct_mcts):
         """Generates a random move for the computer."""
         if self.game_over:
@@ -400,7 +402,8 @@ class Connect6Game:
             move_str = ",".join(f"{self.index_to_label(c)}{r+1}" for r, c in selected)
         elif self.which_piece == 1:
             state = np.copy(self.board)
-            root = UCTNode(state)
+            root = UCTNode(state, parent=None)
+            # print("debug7")
             uct_mcts.iterations = len(root.candidate_actions) * 4
         
             for _ in tqdm(range(uct_mcts.iterations)):
@@ -419,11 +422,15 @@ class Connect6Game:
             selected = self.memory_place
             move_str = ",".join(f"{self.index_to_label(c)}{r+1}" for r, c in selected)
             self.which_piece = 1
-            
+        
+        # print(move_str)
         self.play_move(color, move_str)
 
         print(f"{move_str}\n\n", end='', flush=True)
         print(move_str, file=sys.stderr)
+        print(flush=True)
+
+        return
 
     def show_board(self):
         """Displays the board as text."""
@@ -496,5 +503,5 @@ class Connect6Game:
 
 if __name__ == "__main__":
     game = Connect6Game()
-    uct_mcts = UCTMCTS(game, iterations=100, exploration_constant=1.41, rollout_depth=4)
+    uct_mcts = UCTMCTS(game, iterations=1, exploration_constant=1.41, rollout_depth=2)
     game.run(uct_mcts)

@@ -17,6 +17,8 @@ ludii_preferences.json
 Ludii.jar
 ludii.trl
 math
+value_approximator_4.pkl
+value_approximator_5.pkl
 
 
 # ignore eval.py
