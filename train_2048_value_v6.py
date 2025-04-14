@@ -325,7 +325,7 @@ def td_learning(env, approximator, num_episodes=50000, alpha=0.1, gamma=1, epsil
             success_rate = np.sum(success_flags[-100:]) / 100
             print(f"Episode {episode+1}/{num_episodes} | Avg Score: {avg_score:.2f} | Success Rate: {success_rate:.2f} | Max Tile: {global_max_tile}")
             global_max_tile = 0
-            safe_pickle_dump(approximator, 'value_approximator.pkl')
+            safe_pickle_dump(approximator, 'value_approximator_9.pkl')
 
     return final_scores
 
@@ -339,18 +339,18 @@ def safe_pickle_dump(obj, filepath):
 
 # TODO: Define your own n-tuple patterns
 patterns = [
-    [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)],
-    [(0, 0), (0, 1), (0, 2), (0, 3), (1, 0), (1, 1)],
-    [(1, 0), (1, 1), (1, 2), (1, 3), (2, 0), (2, 1)],
-    [(0, 0), (0, 1), (1, 1), (1, 2), (1, 3), (2, 2)],
-    [(0, 0), (0, 1), (0, 2), (1, 1), (2, 1), (2, 2)],
-    [(0, 0), (0, 1), (1, 1), (2, 1), (3, 1), (3, 2)],
-    [(0, 0), (0, 1), (1, 1), (2, 0), (2, 1), (3, 1)],
-    [(0, 0), (0, 1), (0, 2), (1, 0), (1, 2), (2, 2)]
+    [(0, 0), (0, 1), (0, 2), (0, 3)],
+    [(1, 0), (1, 1), (1, 2), (1, 3)],
+    [(0, 0), (0, 1), (1, 0), (1, 1)],
+    [(1, 1), (1, 2), (2, 1), (2, 2)],
+    [(1, 0), (1, 1), (2, 0), (2, 1)],
+    [(0, 0), (0, 1), (1, 1), (1, 2)],
+    [(0, 0), (0, 1), (0, 2), (1, 2)],
+    [(0, 0), (0, 1), (0, 2), (1, 1)],
 ]
 
 approximator = NTupleApproximator(board_size=4, patterns=patterns)
-with open('value_approximator.pkl', 'rb') as file:
+with open('value_approximator_9.pkl', 'rb') as file:
     approximator = pickle.load(file)
 
 env = Game2048Env()
