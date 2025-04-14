@@ -19,6 +19,7 @@ ludii.trl
 math
 value_approximator_4.pkl
 value_approximator_5.pkl
+value_approximator_5_weights.pkl
 
 
 # ignore eval.py

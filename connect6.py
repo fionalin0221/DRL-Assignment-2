@@ -8,10 +8,11 @@ import itertools
 from tqdm import tqdm
 
 class Eval:
-    def __init__(self, board):
+    def __init__(self, board, player):
         self.board = board
+        self.eval_player = player
         self.size = board.shape[0]
-        self.directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
+        self.directions = [(0, 1), (1, 0), (1, 1), (-1, 1)]
 
     def evaluation(self):
         total_reward = 0
@@ -47,6 +48,8 @@ class Eval:
             else:
                 prev_pos = None
 
+            # if count >= 2:
+            #     print(r, c, count)
             if count == 2:
                 reward += self.connect_two(player, prev_pos, next_pos)
             elif count == 3:
@@ -57,50 +60,50 @@ class Eval:
                 reward += self.connect_five(player, prev_pos, next_pos)
             elif count >= 6:
                 if player == 1:
-                    reward += 1
+                    reward += 10000
                 else:
-                    reward -= 1
+                    reward -= 10000
 
         return reward
 
     def connect_two(self, player, prev_pos, next_pos):
         if prev_pos == 0 and next_pos == 0:
-            reward = 0.005
-        elif prev_pos != 0 and next_pos == 0:
             reward = 0.002
+        elif prev_pos != 0 and next_pos == 0:
+            reward = 0.001
         else:
             reward = 0
-        reward = reward if player == 1 else -reward
+        reward = reward if player == self.eval_player else -reward
         return reward
     
     def connect_three(self, player, prev_pos, next_pos):
         if prev_pos == 0 and next_pos == 0:
             reward = 0.05
         elif prev_pos != 0 and next_pos == 0:
-            reward = 0.01
+            reward = 0.025
         else:
             reward = 0.001
-        reward = reward if player == 1 else -reward
+        reward = reward if player == self.eval_player else -reward
         return reward
 
     def connect_four(self, player, prev_pos, next_pos):
         if prev_pos == 0 and next_pos == 0:
-            reward = 0.15
+            reward = 30
         elif prev_pos != 0 and next_pos == 0:
-            reward = 0.1
+            reward = 30
         else:
-            reward = 0.001
-        reward = reward if player == 1 else -reward
+            reward = 0.002
+        reward = reward if player == self.eval_player else -reward
         return reward
 
     def connect_five(self, player, prev_pos, next_pos):
         if prev_pos == 0 and next_pos == 0:
-            reward = 0.5
+            reward = 50
         elif prev_pos != 0 and next_pos == 0:
-            reward = 0.3
+            reward = 40
         else:
-            reward = 0.001
-        reward = reward if player == 1 else -reward
+            reward = 0.005
+        reward = reward if player == self.eval_player else -reward
         return reward
     
 # UCT Node for MCTS
@@ -133,7 +136,7 @@ class UCTNode:
 		# A node is fully expanded if no legal actions remain untried.
         return len(self.candidate_actions) == 0
     
-    def get_candidate_positions(self, size, radius=1):
+    def get_candidate_positions(self, size, radius=2):
         # stones = np.argwhere(self.state != 0)  # Get all placed stones
         stones = self.state["B"] + self.state["W"]
         candidates = set()
@@ -149,22 +152,25 @@ class UCTNode:
     def get_candidate_actions(self, untried_actions):
         candidate_actions = []
         for idx, (pos0, pos1) in enumerate(untried_actions):
-            if abs(pos1[0]-pos0[0])+abs(pos1[1]-pos0[1]) <= 4:
+            if abs(pos1[0]-pos0[0])+abs(pos1[1]-pos0[1]) < 7:
                 candidate_actions.append(untried_actions[idx])
-        if len(candidate_actions) > 50:
-            candidate_actions = random.sample(candidate_actions, 50)
+        # if len(candidate_actions) > 200:
+        #     candidate_actions = random.sample(candidate_actions, 200)
         return candidate_actions
 
 class UCTMCTS:
-    def __init__(self, env, iterations=500, exploration_constant=1.41, rollout_depth=10):
+    def __init__(self, env, iterations=500, exploration_constant=1.41, rollout_depth=1):
         self.env = env
         self.iterations = iterations
         self.c = exploration_constant  # Balances exploration and exploitation
         self.rollout_depth = rollout_depth
 
-    def create_env_from_state(self, state, turn):
+    def create_env_from_state(self, state, turn, node):
         new_env = copy.deepcopy(self.env)
-        board = self.state_to_board(state)
+        if node:
+            board = self.state_to_board(state)
+        else:
+            board = state
         new_env.board = np.copy(board)
         new_env.turn = turn
         return new_env
@@ -191,16 +197,15 @@ class UCTMCTS:
 
         return best_child
 
-    def rollout(self, sim_env):
+    def rollout(self, sim_env, turn):
         # TODO: Perform a random rollout from the current state up to the specified depth.
         end_game = False
         for _ in range(self.rollout_depth):
-        # while sim_env.check_win() == 0 and (not end_game):
             sim_env, end_game = self.random_move(sim_env)
             if end_game:
                 break
         
-        eval = Eval(sim_env.board)
+        eval = Eval(sim_env.board, turn)
         reward = eval.evaluation()
 
         return reward
@@ -212,7 +217,7 @@ class UCTMCTS:
             node.total_reward += reward
             node = node.parent
 
-    def run_simulation(self, root, turn):
+    def run_simulation(self, root, turn, opponent_moves):
         player = {1: "B", 2: "W"}
         node = root
 
@@ -223,7 +228,7 @@ class UCTMCTS:
         # TODO: Expansion: if the node has untried actions, expand one.
         # check the node has untried actions or the node is leaf
         if node.candidate_actions:
-            sim_env = self.create_env_from_state(node.state, turn)
+            sim_env = self.create_env_from_state(node.state, turn, True)
             
             action = random.choice(node.candidate_actions)
             node.candidate_actions.remove(action)
@@ -231,7 +236,25 @@ class UCTMCTS:
             move_str = f"{sim_env.index_to_label(action[0][1])}{action[0][0]+1},{sim_env.index_to_label(action[1][1])}{action[1][0]+1}"
             sim_env.play_move(player[turn], move_str)
 
-            sim_env, _ = self.random_move(sim_env)
+            # sim_env, _ = self.random_move(sim_env)
+            opponent_move = None
+
+            if opponent_moves:
+                for m in opponent_moves:
+                    move = m[1]
+                    valid = True
+                    for r, c in move:
+                        if sim_env.board[r, c] != 0:
+                            valid = False
+                            break
+                    if valid:
+                        opponent_move = move
+                        break
+
+            if opponent_move:
+                move_str = f"{sim_env.index_to_label(opponent_move[0][1])}{opponent_move[0][0]+1},{sim_env.index_to_label(opponent_move[1][1])}{opponent_move[1][0]+1}"
+                sim_env.play_move(player[3-turn], move_str)
+
             new_state = np.copy(sim_env.board)
 
             child_node = UCTNode(new_state, parent=node)
@@ -239,27 +262,64 @@ class UCTMCTS:
             node = child_node
 
         # Rollout: Simulate a random game from the expanded node.
-        reward = self.rollout(sim_env)
+        reward = self.rollout(sim_env, turn)
+        # print("A:", action, ", r:", reward)
         # Backpropagation: Update the tree with the rollout reward.
         self.backpropagate(node, reward)
 
-    def random_move(self, sim_env):
+    # def random_move(self, sim_env):
+    #     player = {1: "B", 2: "W"}
+        
+    #     state = np.copy(sim_env.board)
+    #     # candidate_positions = self.get_candidate_positions(state)
+        
+    #     empty_positions = [(r, c) for r in range(sim_env.size) for c in range(sim_env.size) if state[r, c] == 0]
+    #     if len(empty_positions) < 2:
+    #         return sim_env, True
+        
+    #     pos = random.sample(empty_positions, 2)
+    #     move_str = ",".join(f"{sim_env.index_to_label(c)}{r+1}" for r, c in pos) 
+    #     sim_env.play_move(player[sim_env.turn], move_str)
+
+    #     return sim_env ,False
+    
+    def get_strong_opponent_moves(self, state, turn, top_k=5):
         player = {1: "B", 2: "W"}
-        
-        state = np.copy(sim_env.board)
+
+        # candidate_actions = env.get_candidate_moves()  # List of [(p1, p2), ...]
         candidate_positions = self.get_candidate_positions(state)
-        
-        # empty_positions = [(r, c) for r in range(sim_env.size) for c in range(sim_env.size) if state[r, c] == 0]
-        if len(candidate_positions) < 2:
-            return sim_env, True
-        
-        pos = random.sample(candidate_positions, 2)
-        move_str = ",".join(f"{sim_env.index_to_label(c)}{r+1}" for r, c in pos) 
-        sim_env.play_move(player[sim_env.turn], move_str)
+        untried_actions = list(itertools.combinations(candidate_positions, 2))
+        candidate_actions = self.get_candidate_actions(untried_actions)
 
-        return sim_env ,False
+        scored_actions = []
 
-    def get_candidate_positions(self, state, radius=1):
+        for action in candidate_actions:
+            sim_env = self.create_env_from_state(state, turn, False)
+            
+            move_str = ",".join(f"{sim_env.index_to_label(c)}{r+1}" for r, c in action)
+            
+            # move_str = f"{sim_env.index_to_label(action[0][1])}{action[0][0]+1}," \
+            #         f"{sim_env.index_to_label(action[1][1])}{action[1][0]+1}"
+            sim_env.play_move(player[turn], move_str)
+            new_state = np.copy(sim_env.board)
+
+            eval = Eval(new_state, turn)
+            score = eval.evaluation()
+            scored_actions.append((score, action))
+
+        if not scored_actions:
+            return None
+
+        # Sort by score descending
+        scored_actions.sort(key=lambda x: x[0], reverse=True)
+        
+
+        # Select randomly among top_k best actions
+        top_actions = scored_actions[:min(top_k, len(scored_actions))]
+        
+        return top_actions
+
+    def get_candidate_positions(self, state, radius=2):
         size = state.shape[0]
         stones = np.argwhere(state != 0)  # Get all placed stones
         candidates = set()
@@ -270,6 +330,15 @@ class UCTMCTS:
                     if 0 <= nr < size and 0 <= nc < size and state[nr, nc] == 0:
                         candidates.add((nr, nc))
         return list(candidates)
+    
+    def get_candidate_actions(self, untried_actions):
+        candidate_actions = []
+        for idx, (pos0, pos1) in enumerate(untried_actions):
+            if abs(pos1[0]-pos0[0])+abs(pos1[1]-pos0[1]) < 7:
+                candidate_actions.append(untried_actions[idx])
+        # if len(candidate_actions) > 200:
+        #     candidate_actions = random.sample(candidate_actions, 200)
+        return candidate_actions
 
     def best_action_distribution(self, root):
         '''
@@ -279,12 +348,16 @@ class UCTMCTS:
         # distribution = np.zeros(len((total_visits)))
         best_visits = -1
         best_action = None
+        best_score = -np.inf
         # print(root.children.items())
         for action, child in root.children.items():
             # distribution[action] = child.visits / total_visits if total_visits > 0 else 0
-            if child.visits > best_visits:
-                best_visits = child.visits
+            if child.total_reward / child.visits > best_score:
+                best_score = child.total_reward / child.visits
                 best_action = action
+            # if child.visits > best_visits:
+            #     best_visits = child.visits
+            #     best_action = action
         return best_action
 
 
@@ -385,10 +458,8 @@ class Connect6Game:
         for row, col in positions:
             self.board[row, col] = 1 if color.upper() == 'B' else 2
 
-        self.turn = 3 - self.turn
-        print('= ', end='', flush=True)
-
-        return
+        # self.turn = 3 - self.turn
+        # print('= ', end='', flush=True)
 
     def generate_move(self, color, uct_mcts):
         """Generates a random move for the computer."""
@@ -396,20 +467,25 @@ class Connect6Game:
             print("? Game over")
             return
         move_str = ""
+
+        player = 1 if color == "B" else 2
+
         if np.all(self.board == 0):
-            empty_positions = [(r, c) for r in range(self.size) for c in range(self.size) if self.board[r, c] == 0]
+            empty_positions = [(r, c) for r in range(1, self.size-1) for c in range(1, self.size-1) if self.board[r, c] == 0]
             selected = random.sample(empty_positions, 1)
             move_str = ",".join(f"{self.index_to_label(c)}{r+1}" for r, c in selected)
+
         elif self.which_piece == 1:
             state = np.copy(self.board)
             root = UCTNode(state, parent=None)
-            # print("debug7")
-            uct_mcts.iterations = len(root.candidate_actions) * 4
-        
-            for _ in tqdm(range(uct_mcts.iterations)):
-                uct_mcts.run_simulation(root, self.turn)
+            uct_mcts.iterations = len(root.candidate_actions)
 
-                best_action = uct_mcts.best_action_distribution(root)
+            opponent_moves = uct_mcts.get_strong_opponent_moves(state, 3-player)
+        
+            for _ in range(uct_mcts.iterations):
+                uct_mcts.run_simulation(root, player, opponent_moves)
+
+            best_action = uct_mcts.best_action_distribution(root)
 
             selected = [best_action[0]]
             move_str = ",".join(f"{self.index_to_label(c)}{r+1}" for r, c in selected)
@@ -428,9 +504,6 @@ class Connect6Game:
 
         print(f"{move_str}\n\n", end='', flush=True)
         print(move_str, file=sys.stderr)
-        print(flush=True)
-
-        return
 
     def show_board(self):
         """Displays the board as text."""
@@ -503,5 +576,5 @@ class Connect6Game:
 
 if __name__ == "__main__":
     game = Connect6Game()
-    uct_mcts = UCTMCTS(game, iterations=1, exploration_constant=1.41, rollout_depth=2)
+    uct_mcts = UCTMCTS(game, iterations=2000, exploration_constant=1.41, rollout_depth=0)
     game.run(uct_mcts)

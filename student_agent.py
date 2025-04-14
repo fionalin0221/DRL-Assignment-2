@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import copy
 import random
 import math
+import os
 
 COLOR_MAP = {
     0: "#cdc1b4", 2: "#eee4da", 4: "#ede0c8", 8: "#f2b179",
@@ -643,7 +644,8 @@ class TD_MCTS:
             return best_child
         else:
             select_child = None
-            num = random.choice([2, 4])
+            # num = random.choice([2, 4])
+            num = 2 if random.random() < 0.9 else 4
             children = []
             for child in node.children.values():
                 if child.random_tile['num'] == num:
@@ -654,40 +656,18 @@ class TD_MCTS:
             return select_child
 
 
-    def rollout(self, sim_env, after_state, state, state_type, depth):
+    def rollout(self, sim_env, after_state, state, state_type, score, depth):
         # TODO: Perform a random rollout until reaching the maximum depth or a terminal state.
         # TODO: Use the approximator to evaluate the final state.
         done = False
         rewards = 0.0
 
-        V_norm = 45000
+        V_norm = 30000
+        # print(self.approximator.value(after_state), score)
+        # print((self.approximator.value(after_state) + score)/V_norm)
 
         # print("Before " ,self.approximator.value(after_state)/V_norm)
         # print(after_state)
-
-        # if state_type == "next":
-        #     legal_moves = [a for a in range(4) if sim_env.is_move_legal(a)]
-        #     if not legal_moves:
-        #         return rewards + self.approximator.value(after_state)/V_norm
-            
-        #     values = []
-        #     sim_sim_env = Action(state)
-        #     for a in legal_moves:
-        #         a_s, r = sim_sim_env.fake_step(a)
-        #         values.append(self.approximator.value(a_s))
-                
-        #     action = legal_moves[np.argmax(values)]
-
-        #     after_state, reward = sim_env.fake_step(action)
-        #     rewards += reward
-
-        #     empty_cells = list(zip(*np.where(after_state == 0)))
-        #     if empty_cells:
-        #         x, y = random.choice(empty_cells)
-        #         num = 2 if random.random() < 0.9 else 4
-        #         sim_env.add_tile(x, y, num)
-        #     else:
-        #         return rewards + self.approximator.value(after_state)/V_norm
 
         if state_type == "after":
             empty_cells = list(zip(*np.where(state == 0)))
@@ -696,11 +676,11 @@ class TD_MCTS:
                 num = 2 if random.random() < 0.9 else 4
                 sim_env.add_tile(x, y, num)
             else:
-                return 0.0 + self.approximator.value(after_state)/V_norm
+                return (self.approximator.value(after_state) + score)/V_norm
             
         legal_moves = [a for a in range(4) if sim_env.is_move_legal(a)]
         if not legal_moves:
-            return 0.0 + self.approximator.value(after_state)/V_norm
+            return (self.approximator.value(after_state) + score)/V_norm 
 
         # real rollout
         for _ in range(depth):
@@ -731,7 +711,7 @@ class TD_MCTS:
             else:
                 break
 
-        return rewards + self.approximator.value(after_state)/V_norm
+        return (self.approximator.value(after_state) + rewards + score)/V_norm 
 
     def backpropagate(self, node, rollout_reward):
         # TODO: Propagate the obtained reward back up the tree.
@@ -808,7 +788,7 @@ class TD_MCTS:
         else:
             after_state = copy.copy(node.state)
 
-        rollout_reward = self.rollout(sim_env, after_state, copy.copy(node.state), node.state_type, self.rollout_depth)
+        rollout_reward = self.rollout(sim_env, after_state, copy.copy(node.state), node.state_type, node.score, self.rollout_depth)
 
         # Backpropagate the obtained reward.
         self.backpropagate(node, rollout_reward)
@@ -825,18 +805,30 @@ class TD_MCTS:
                 best_visits = child.visits
                 best_action = action
         return best_action, distribution
+    
+        # best_score = -1
+        # best_act = None
+        # for action, child in root.children.items():
+        #     score = child.total_reward / child.visits if child.visits > 0 else 0
+        #     if score > best_score:
+        #         best_score = score
+        #         best_act = action
 
+        # if best_act == None:
+        #     best_act = random.choice([0,1,2,3])
+        
+        # return best_act, None
 
-patterns = [
-    [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)],
-    [(0, 0), (0, 1), (0, 2), (0, 3), (1, 0), (1, 1)],
-    [(1, 0), (1, 1), (1, 2), (1, 3), (2, 0), (2, 1)],
-    [(0, 0), (0, 1), (1, 1), (1, 2), (1, 3), (2, 2)],
-    [(0, 0), (0, 1), (0, 2), (1, 1), (2, 1), (2, 2)],
-    [(0, 0), (0, 1), (1, 1), (2, 1), (3, 1), (3, 2)],
-    [(0, 0), (0, 1), (1, 1), (2, 0), (2, 1), (3, 1)],
-    [(0, 0), (0, 1), (0, 2), (1, 0), (1, 2), (2, 2)]
-]
+# patterns = [
+#     [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)],
+#     [(0, 0), (0, 1), (0, 2), (0, 3), (1, 0), (1, 1)],
+#     [(1, 0), (1, 1), (1, 2), (1, 3), (2, 0), (2, 1)],
+#     [(0, 0), (0, 1), (1, 1), (1, 2), (1, 3), (2, 2)],
+#     [(0, 0), (0, 1), (0, 2), (1, 1), (2, 1), (2, 2)],
+#     [(0, 0), (0, 1), (1, 1), (2, 1), (3, 1), (3, 2)],
+#     [(0, 0), (0, 1), (1, 1), (2, 0), (2, 1), (3, 1)],
+#     [(0, 0), (0, 1), (0, 2), (1, 0), (1, 2), (2, 2)]
+# ]
 # patterns = [
 #     [(0, 0), (0, 1), (0, 2), (0, 3)],
 #     [(1, 0), (1, 1), (1, 2), (1, 3)],
@@ -846,8 +838,25 @@ patterns = [
 #     [(0, 0), (0, 1), (1, 1), (1, 2)],
 # ]
 
+patterns = [
+    [(0, 0), (0, 1), (0, 2), (0, 3)],
+    [(1, 0), (1, 1), (1, 2), (1, 3)],
+    [(0, 0), (0, 1), (1, 0), (1, 1)],
+    [(1, 1), (1, 2), (2, 1), (2, 2)],
+    [(1, 0), (1, 1), (2, 0), (2, 1)],
+    [(0, 0), (0, 1), (1, 1), (1, 2)],
+    [(0, 0), (0, 1), (0, 2), (1, 2)],
+    [(0, 0), (0, 1), (0, 2), (1, 1)],
+]
+
+# import gdown
+# # os.system("gdown --fuzzy https://drive.google.com/file/d/1G9xRMK6oniVhs_EZYo8S7Mo4eqVbv7jT/view?usp=sharing -O value_approximator_5_weights.pkl")
+# url = "https://drive.google.com/file/d/1G9xRMK6oniVhs_EZYo8S7Mo4eqVbv7jT/view?usp=sharing"
+# output = "value_approximator_5_weights.pkl"
+# gdown.download(url, output, quiet=False, fuzzy=True, resume=True)
+
 approximator = NTupleApproximator(board_size=4, patterns=patterns)
-with open('value_approximator_5_weights.pkl', 'rb') as file:
+with open('value_approximator_9_weights.pkl', 'rb') as file:
     approximator.weights = pickle.load(file)
 
 
@@ -858,24 +867,15 @@ def get_action(state, score):
     env = Action(state)
     # print([a for a in range(4) if root.is_move_legal(a)])
 
-    td_mcts = TD_MCTS(env, approximator, iterations=5, exploration_constant=0.001, rollout_depth=0, gamma=0.99)
+    td_mcts = TD_MCTS(env, approximator, iterations=5, exploration_constant=0.00001, rollout_depth=0, gamma=0.99)
 
     # Run multiple simulations to build the MCTS tree
     for _ in range(td_mcts.iterations):
         td_mcts.run_simulation(root)
     
     # Select the best action (based on highest visit count)
-    # action, _ = td_mcts.best_action_distribution(root)
-    best_score = -1
-    best_act = None
-    for action, child in root.children.items():
-        score = child.total_reward / child.visits if child.visits > 0 else 0
-        if score > best_score:
-            best_score = score
-            best_act = action
+    best_act, _ = td_mcts.best_action_distribution(root)
 
-    if best_act == None:
-        best_act = random.choice([0,1,2,3])
 
     return best_act
 
